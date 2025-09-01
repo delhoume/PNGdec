@@ -748,6 +748,11 @@ PNG_STATIC void DeFilter(uint8_t *pCurr, uint8_t *pPrev, int iWidth, int iPitch)
 //
 PNG_STATIC int PNGInit(PNGIMAGE *pPNG)
 {
+#ifdef FUTURE_CHUNKS
+    pPNG->szAuthor[0] = 0;
+    pPNG->szSoftware[0] = 0;     
+    pPNG->szComment[0] = 0;
+#endif    
     return PNGParseInfo(pPNG); // gather info for image
 } /* PNGInit() */
 //
@@ -762,6 +767,9 @@ PNG_STATIC int DecodePNG(PNGIMAGE *pPage, void *pUser, int iOptions)
     int err, y, iLen=0;
     int bDone, iOffset, iFileOffset, iBytesRead;
     int iMarker=0;
+#ifdef FUTURE_CHUNKS
+    int finish = FALSE;
+#endif
     uint8_t *tmp, *pCurr, *pPrev;
     z_stream d_stream; /* decompression stream */
     uint8_t *s = pPage->ucFileBuf;
@@ -810,7 +818,11 @@ PNG_STATIC int DecodePNG(PNGIMAGE *pPage, void *pUser, int iOptions)
 
     // continue until fully decoded
     // parse the markers until the next data block
-    while (!bDone && y < pPage->iHeight)
+    while (!bDone && y < pPage->iHeight
+#ifdef FUTURE_CHUNKS
+         && !finish
+#endif
+        )
     {
         if (iOffset > iBytesRead-8) { // need to read more data
             iFileOffset += (iOffset - iBytesRead);
@@ -831,10 +843,14 @@ PNG_STATIC int DecodePNG(PNGIMAGE *pPage, void *pUser, int iOptions)
             return 1;
         }
         iMarker = MOTOLONG(&s[iOffset+4]);
+        char buf[5];
+        memcpy(buf, (const char*)&iMarker, 4);
+        buf[4] = 0;
+        printf("%d %s\n", iLen, buf);
         iOffset += 8; // point to the marker data
         switch (iMarker)
         {
-            case 0x44474b62: // 'bKGD' DEBUG
+            case 0x624b4744: // 'bKGD' DEBUG
                 break;
             case 0x67414d41: //'gAMA'
                 break;
@@ -882,6 +898,14 @@ PNG_STATIC int DecodePNG(PNGIMAGE *pPage, void *pUser, int iOptions)
                 }
                 break;
             case 0x49444154: //'IDAT' image data block
+#ifdef FUTURE_CHUNKS
+            {
+                // skip
+                bDone = TRUE;
+                y = pPage->iHeight;
+            }
+            break;
+#else
                 while (iLen) {
                     if (iOffset >= iBytesRead) {
                         // we ran out of data; get some more
@@ -951,7 +975,7 @@ PNG_STATIC int DecodePNG(PNGIMAGE *pPage, void *pUser, int iOptions)
                         y = pPage->iHeight;
                         bDone = TRUE;
                     } else  if (err == Z_DATA_ERROR || err == Z_STREAM_ERROR) {
-                        iLen = 0; // quit now
+                       iLen = 0; // quit now
                         y = pPage->iHeight;
                         pPage->iError = PNG_DECODE_ERROR;
                         bDone = TRUE; // force loop to exit with error
@@ -966,40 +990,61 @@ PNG_STATIC int DecodePNG(PNGIMAGE *pPage, void *pUser, int iOptions)
                     // We consumed everything, so move the pointer to the zero.
                     // We haven't read CRC for the block, but it doesn't matter as
                     // pfnSeek will move past it to the next chunk.
-                    iOffset = 0;
+                   iOffset = 0;
                 }
-                break;
+             break;
+#endif
                 //               case 0x69545874: //'iTXt'
-                //               case 0x7a545874: //'zTXt'
-#ifdef FUTURE
+                //               case 0x7a545874: //'zTXt' image magick creates these for large text
+
             case 0x74455874: //'tEXt'
-            {
-                char szTemp[256];
+#ifdef FUTURE_CHUNKS
+           {
                 char *pDest = NULL;
-                memcpy(szTemp, &s[iOffset], 80); // get the label length (Title, Author, Description, Copyright, Creation Time, Software, Disclaimer, Warning, Source, Comment)
-                i = (int)strlen(szTemp) + 1; // start of actual text
-                if (strcmp(szTemp, "Comment") == 0 || strcmp(szTemp, "Description") == 0) pDest = &pPage->szComment[0];
-                else if (strcmp(szTemp, "Software") == 0) pDest = &pPage->szSoftware[0];
-                else if (strcmp(szTemp, "Author") == 0) pDest = &pPage->szArtist[0];
-                if (pDest != NULL)
+                int i = (int)strlen((const char*)&s[iOffset]) + 1; // start of actual text
+                if (strcmp((const char*)&s[iOffset], "Comment") == 0) pDest = &pPage->szComment[0];
+                else if (strcmp((const char*)&s[iOffset], "Software") == 0) pDest = &pPage->szSoftware[0];
+                else if (strcmp((const char*)&s[iOffset], "Author") == 0) pDest = &pPage->szAuthor[0];
+               if (pDest != NULL)
                 {
-                    if ((iLen - i) < 128)
+                    if ((iLen - i) < PNG_TEXT_CHUNK_PROPERTY_SIZE)
                     {
-                        memcpy(pPage->szComment, &pPage->pData[iOffset + i], iLen - i);
-                        pPage->szComment[iLen - i + 1] = 0;
+                        memcpy(pDest, (const unsigned char*)&s[iOffset + i], iLen - i);
+                        pDest[iLen - i + 1] = '\0';
                     }
                     else
                     {
-                        memcpy(pPage->szComment, &pPage->pData[iOffset + i], 127);
-                        pPage->szComment[127] = '\0';
+                        memcpy(pDest, (const unsigned char*)&s[iOffset + i], PNG_TEXT_CHUNK_PROPERTY_SIZE - 4);
+                    memcpy(&pDest[PNG_TEXT_CHUNK_PROPERTY_SIZE - 4], "...", 3);                      
+                        pDest[PNG_TEXT_CHUNK_PROPERTY_SIZE - 1] = '\0';
                     }
                 }
-            }
-                break;
+            } 
 #endif
+            break;
+#ifdef FUTURE_CHUNKS
+           case 0x49454e44: // IEND
+           printf("iendd");
+            finish = TRUE;
+            break;
+#endif
+
         } // switch
         iOffset += (iLen + 4); // skip data + CRC
     } // while y < height
     err = inflateEnd(&d_stream);
     return pPage->iError;
 } /* DecodePNG() */
+
+#ifdef FUTURE_CHUNKS
+PNG_STATIC const char* PNG_getProperty(PNGIMAGE *pPNG, const char* propname) {
+    if (strcmp(propname, "Author") == 0)
+       return pPNG->szAuthor;
+   else if (strcmp(propname, "Comment") == 0)
+       return pPNG->szComment;
+   else if (strcmp(propname, "Software") == 0)
+       return pPNG->szSoftware;
+   else 
+    return NULL;
+ }
+ #endif

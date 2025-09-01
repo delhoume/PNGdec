@@ -1,4 +1,4 @@
-CFLAGS=-Wall -O2 -g -fsanitize=address,undefined
+CFLAGS=-Wall -g -fsanitize=address,undefined -D FUTURE_CHUNKS
 LIBS = 
 
 all: png_test

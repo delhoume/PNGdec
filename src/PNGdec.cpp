@@ -207,3 +207,10 @@ uint8_t PNG::getAlphaMask(PNGDRAW *pDraw, uint8_t *pMask, uint8_t ucThreshold)
 {
     return PNGMakeMask(pDraw, pMask, ucThreshold);
 } /* getAlphaMask() */
+
+#ifdef FUTURE_CHUNKS
+ const char* PNG::getProperty(const char* propname) 
+ {
+    return PNG_getProperty(&_png, propname);
+ }
+ #endif /* getProperty() */

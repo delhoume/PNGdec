@@ -27,6 +27,9 @@
 #include "../../../test_images/octocat_8bpp.h"
 #include "../../../test_images/octocat.h"
 #include "../../../test_images/bugpng.h"
+#ifdef FUTURE_CHUNKS
+#include "../../../test_images/blanktext1bit.h"
+#endif
 PNG png;
 int xoff, yoff, iBpp;
 int iWidth, iLines;
@@ -296,7 +299,7 @@ int main(int argc, const char * argv[]) {
     png.setBuffer(NULL);
     png.decode(NULL, 0);
     png.close();
-    if (u16Out == 0x1f00) { // check transparnet pixel (0,0) to see if it matches the 32-bit BG color we asked for
+    if (u16Out == 0x1f00) { // check transparent pixel (0,0) to see if it matches the 32-bit BG color we asked for
         iTotalPass++;
         PNGLOG(__LINE__, szTestName, " - PASSED");
     } else {
@@ -313,14 +316,31 @@ int main(int argc, const char * argv[]) {
     png.setBuffer(NULL);
     rc = png.decode(NULL, 0);
     png.close();
-    if (rc == PNG_QUIT_EARLY) { // check transparnet pixel (0,0) to see if it matches the 32-bit BG color we asked for
+    if (rc == PNG_QUIT_EARLY) { // check transparent pixel (0,0) to see if it matches the 32-bit BG color we asked for
         iTotalPass++;
         PNGLOG(__LINE__, szTestName, " - PASSED");
     } else {
         iTotalFail++;
         PNGLOG(__LINE__, szTestName, " - FAILED");
     }
-
+#ifdef FUTURE_CHUNKS
+    // Test 11 - check for tEXT chunks contents
+    png.openFLASH((uint8_t*)blanktext1bit, sizeof(blanktext1bit), PNGDraw);
+    png.setBuffer(NULL);
+    png.decode(NULL, PNG_CHECK_CRC);
+    png.close();
+    szTestName = (char *)"PNG Verify tEXT chunk properties";
+    const char* comment = png.getProperty("Comment");
+    const char* author = png.getProperty("Author");
+    const char* software = png.getProperty("Software");
+    if (strlen(comment) <= (PNG_TEXT_CHUNK_PROPERTY_SIZE  - 1) && strcmp(author, "myself") == 0 && strlen(software) == 0)  {
+            PNGLOG(__LINE__, szTestName, " - PASSED");
+            iTotalPass++;
+       } else {
+        iTotalFail++;
+        PNGLOG(__LINE__, szTestName, " - FAILED");
+       }
+#endif
     // FUZZ testing
     // Randomize the input data (file header and compressed data) and confirm that the library returns an error code
     // and doesn't have an invalid pointer exception

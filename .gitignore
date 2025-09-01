@@ -1,0 +1,5 @@
+MacOS/PNG_Test/PNG_Test/png_test
+.vscode/launch.json
+*.o
+linux/png_demo
+linux/outfile.bmp

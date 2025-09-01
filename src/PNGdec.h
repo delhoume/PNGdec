@@ -48,6 +48,9 @@
 #endif
 /* Defines and variables */
 #define PNG_FILE_BUF_SIZE 2048
+#ifdef FUTURE_CHUNKS
+#define PNG_TEXT_CHUNK_PROPERTY_SIZE 128
+#endif
 // Number of bytes to reserve for current and previous lines
 // Defaults to 320 32-bit pixels max width
 // but can be overidden with a macro defined at compile time
@@ -155,6 +158,11 @@ typedef struct png_image_tag
     uint8_t ucPalette[1024];
     uint8_t ucPixels[PNG_MAX_BUFFERED_PIXELS];
     uint8_t ucFileBuf[PNG_FILE_BUF_SIZE]; // holds temp file data
+#ifdef FUTURE_CHUNKS
+    char szComment[PNG_TEXT_CHUNK_PROPERTY_SIZE];    
+    char szSoftware[PNG_TEXT_CHUNK_PROPERTY_SIZE];    
+    char szAuthor[PNG_TEXT_CHUNK_PROPERTY_SIZE];
+#endif
 } PNGIMAGE;
 
 #ifdef __cplusplus
@@ -184,7 +192,9 @@ class PNG
     void setBuffer(uint8_t *pBuffer);
     uint8_t getAlphaMask(PNGDRAW *pDraw, uint8_t *pMask, uint8_t ucThreshold);
     void getLineAsRGB565(PNGDRAW *pDraw, uint16_t *pPixels, int iEndianness, uint32_t u32Bkgd);
-
+#ifdef FUTURE_CHUNKS
+    const char* getProperty(const char* propname);
+#endif
   private:
     PNGIMAGE _png;
 };
@@ -206,6 +216,9 @@ int PNG_hasAlpha(PNGIMAGE *pPNG);
 int PNG_isInterlaced(PNGIMAGE *pPNG);
 uint8_t *PNG_getBuffer(PNGIMAGE *pPNG);
 void PNG_setBuffer(PNGIMAGE *pPNG, uint8_t *pBuffer);
+#ifdef FUTURE_CHUNKS
+const char* PNG_getProperty(PNGIMAGE *pPNG, const char* propname);
+#endif
 #endif // __cplusplus
 
 // Due to unaligned memory causing an exception, we have to do these macros the slow way
